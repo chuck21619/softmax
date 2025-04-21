@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+    <title>Linear Regression</title>
+    <link rel="icon" href="bird-icon.png" type="image/png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+
+<body>
+    <nav>
+        <ul>
+            <li><a href="#" data-jsFile="About.js">About</a></li>
+            <li><a href="#" data-jsFile="Univariate.js">Univariate<br>Linear Regression</a></li>
+            <li><a href="#" data-jsFile="Polynomial.js">Squared Univariate<br>Linear Regression</a></li>
+            <li><a href="#" data-jsFile="PolynomialCubed.js">Cubed Univariate<br>Linear Regression</a></li>
+            <li><a href="#" data-jsFile="MultipleVariable.js">Multiple Variable<br>Linear Regression</a></li>
+            <li><a href="#" data-jsFile="LogisticRegression.js">Univariate<br>Logistic Regression</a></li>
+            <li><a href="#" data-jsFile="MultipleLogisticRegression.js">Multiple Variable<br>Logistic Regression</a>
+            <li><a href="#" data-jsFile="NeuralNetworkBinaryClassification.js">Binary Classification<br>Neural Network</a></li>
+        </ul>
+    </nav>
+    <div id="content">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h1 id="title">Machine Learning</h1>
+            <div hidden id="drop-area">
+                <p>Drag and drop your Excel file here</p>
+                <input type="file" id="fileInput" style="display: none;">
+            </div>
+        </div>
+        <canvas hidden id="myChart"></canvas>
+        <p id="subtitle">I built this site without a machine learning library as an learning exercise. It allows you to drop in an excel file to train on, then run inference. Select a method on the left to get started</p>
+        <div id="nnOptions" style="display: none;">
+            <label for="iterationDropdown">Iterations</label>
+            <select id="iterationDropdown">
+                <option value="100">100</option>
+                <option value="1000">1000</option>
+                <option value="10000">10000</option>
+                <option value="100000">100000</option>
+            </select>
+            <br />
+            <br />
+            <table id="nnTable"></table>
+        </div>
+        <p id="equation">Excel format:</p>
+        <div id="images">
+            <img src="images/univariate_example.png" alt="">
+            <img src="images/multiple_variable_example.png" alt="">
+        </div>
+        <table id="predictions">
+        </table>
+    </div>
+    <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="index.js" type="module"></script>
+</body>
+
+
+</html>
