@@ -1,0 +1,29 @@
+body {
+    color: rgb(243, 243, 243);
+    background-color:rgb(40, 114, 123);
+    font-family: Arial, sans-serif;
+}
+button {
+    width: 50px;
+}
+#drop-area {
+    border: 2px dashed #ccc;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    margin-left: 20px;
+}
+#drop-area.highlight {
+    border-color: darkgreen;
+}
+
+#predictions {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+#predictions th, #predictions td {
+    padding: 1px;
+    text-align: left;
+    border: 1px solid rgb(255, 255, 255);
+}

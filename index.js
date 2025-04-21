@@ -1,187 +1,12 @@
-import Univarite from './methods/Univariate.js';
-import MultipleVariable from './methods/MultipleVariable.js';
-import Polynomial from './methods/Polynomial.js';
-import PolynomialCubed from './methods/PolynomialCubed.js';
-import LogisticRegression from './methods/LogisticRegression.js';
-import NeuralNetworkBinaryClassification from './methods/NeuralNetworkBinaryClassification.js';
-import MultipleLogisticRegression from './methods/MultipleLogisticRegression.js';
 
-var method;
-function onNavButtonClick(file) {
-    const navLinks = document.querySelectorAll('nav ul li a');
-    navLinks.forEach(link => link.classList.remove('active'));
-    const clickedLink = document.querySelector(`nav ul li a[data-jsFile="${file}"]`);
-    clickedLink.classList.add('active');
-
-    document.getElementById('drop-area').hidden = false;
-    setChartVisible(false);
-    document.getElementById('equation').innerText = '';
-    document.getElementById('predictions').innerHTML = '';
-    if (file == 'About.js') {
-        document.getElementById('drop-area').hidden = true;
-        document.getElementById('title').innerHTML = originalTitle;
-        document.getElementById('subtitle').innerHTML = originalSubtitle;
-        document.getElementById('equation').innerHTML = originalEquation;
-        document.getElementById('images').innerHTML = originalImages;
-    }
-    else {
-        document.getElementById('images').innerHTML = '';
-        if (file == 'Univariate.js') {
-            method = new Univarite(myChart);
-            document.getElementById('title').innerHTML = "Univariate<br>Linear Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Non-polynomial.";
-        }
-        else if (file == 'MultipleVariable.js') {
-            document.getElementById('title').innerHTML = "Multiple Variable<br>Linear Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Non-polynomial with no feature interaction.";
-            method = new MultipleVariable(myChart);
-        }
-        else if (file == 'Polynomial.js') {
-            document.getElementById('title').innerHTML = "Polynomial Univariate<br>Linear Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Features are input and input squared.";
-            method = new Polynomial(myChart);
-        }
-        else if (file == 'PolynomialCubed.js') {
-            document.getElementById('title').innerHTML = "Polynomial Univariate<br>Linear Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Features are input, input squared, and input cubed.";
-            method = new PolynomialCubed(myChart);
-        }
-        else if (file == 'LogisticRegression.js') {
-            document.getElementById('title').innerHTML = "Univariate<br>Logistic Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Non-polynomial.";
-            method = new LogisticRegression(myChart);
-        }
-        else if (file == 'MultipleLogisticRegression.js') {
-            document.getElementById('title').innerHTML = "Multiple Variable<br>Logistic Regression";
-            document.getElementById('subtitle').innerHTML = "Mean Normalized. Non-polynomial with no feature interaction";
-            method = new MultipleLogisticRegression(myChart);
-        }
-        else if (file == 'NeuralNetworkBinaryClassification.js') {
-            document.getElementById('title').innerHTML = "Binary Classication<br>Neural Network";
-            document.getElementById('subtitle').innerHTML = "ReLu hidden activations. Sigmoid output activation. 0.0075 learning rate.";
-            method = new NeuralNetworkBinaryClassification(myChart);
-        }
-    }
-    document.getElementById('nnOptions').style.display = file == 'NeuralNetworkBinaryClassification.js' ? 'block' : 'none';
-}
-
-window.addEventListener('resize', function () {
-    updateChartMaxHeight();
-});
-
-function updateChartMaxHeight() {
-    if (document.getElementById('myChart').style.visibility == 'hidden') {
-        document.getElementById('myChart').style.maxHeight = 0 + 'px';
-    }
-    else {
-        const chartElement = document.getElementById('myChart');
-        const chartBottom = chartElement.getBoundingClientRect().top;
-        const windowHeight = window.innerHeight - 20;
-        const maxChartHeight = windowHeight - chartBottom;
-        chartElement.style.maxHeight = maxChartHeight + 'px';
-    }
-}
-
+var decks;
 var originalTitle;
-var originalSubtitle;
-var originalEquation;
 var originalImages;
 document.addEventListener('DOMContentLoaded', function () {
-    hookUpNavButtons();
     setupDropArea();
-    createChart();
-    setChartVisible(false);
     originalTitle = document.getElementById('title').innerHTML;
-    originalSubtitle = document.getElementById('subtitle').innerHTML;
-    originalEquation = document.getElementById('equation').innerHTML;
-    originalImages = document.getElementById('images').innerHTML;
 
-    //set About button active
-    const navLinks = document.querySelectorAll('nav ul li a');
-    navLinks.forEach(link => link.classList.remove('active'));
-    const clickedLink = document.querySelector(`nav ul li a[data-jsFile="${'About.js'}"]`);
-    clickedLink.classList.add('active');
 });
-
-
-var myChart;
-function createChart() {
-    const ctx = document.getElementById('myChart').getContext('2d');
-    myChart = new Chart(ctx, {
-        type: 'scatter',
-        data: { datasets: [] },
-        options: {
-            backgroundColor: 'rgb(255, 255, 255)',
-            color: 'rgb(255, 255, 255)',
-            responsive: true,
-            plugins: {
-                legend: {
-                    onClick: function (event, legendItem) {
-                        if (method instanceof MultipleVariable || method instanceof MultipleLogisticRegression) {
-                            const index = legendItem.datasetIndex;
-                            const dataset = myChart.data.datasets[index];
-                            const label = dataset.label;
-                            myChart.data.datasets.forEach((dataset) => {
-                                dataset.hidden = dataset.label != label;
-                            });
-                            myChart.update();
-                        }
-                        else {
-                            const datasetIndex = legendItem.datasetIndex;
-                            const dataset = myChart.data.datasets[datasetIndex];
-                            dataset.hidden = !dataset.hidden;
-                            myChart.update();
-                        }
-                    },
-                    labels: {
-                        // Use a custom legend label to combine the line and scatter appearance
-                        generateLabels: (chart) => {
-                            const uniqueLabels = chart.data.datasets.filter((dataset, index, self) => {
-                                return self.findIndex(d => d.label === dataset.label) === index;
-                            });
-                            return uniqueLabels.map(function (dataset, i) {
-                                // Retrieve the dataset label
-                                var meta = chart.getDatasetMeta(i);
-                                var style = meta.controller.getStyle(0);
-
-                                return {
-                                    text: dataset.label,  // The dataset's label (e.g., "Sales", "Revenue")
-                                    fillStyle: style.backgroundColor || style.borderColor,  // Dataset's fill color
-                                    strokeStyle: style.borderColor,  // Border color
-                                    lineWidth: style.borderWidth,  // Border width
-                                    hidden: !chart.isDatasetVisible(i),  // Whether the dataset is visible or hidden
-                                    datasetIndex: i,  // Index of the dataset
-                                };
-                            });
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    grid: { color: 'rgb(0, 0, 0)' },
-                    ticks: { color: 'rgb(0, 0, 0)' }
-                },
-                y: {
-                    type: 'linear',
-                    position: 'left',
-                    grid: { color: 'rgb(0, 0, 0)' },
-                    ticks: { color: 'rgb(0, 0, 0)' }
-                }
-            }
-        }
-    });
-}
-
-function hookUpNavButtons() {
-    const navLinks = document.querySelectorAll('nav ul li a');
-    navLinks.forEach(link => {
-        const jsFile = link.getAttribute('data-jsFile');
-        link.addEventListener('click', () => onNavButtonClick(jsFile));
-    });
-}
 
 function setupDropArea() {
     const dropArea = document.getElementById('drop-area');
@@ -241,7 +66,6 @@ function handleFiles(files) {
         if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             reader.readAsArrayBuffer(file);
             reader.onload = function (e) {
-                document.getElementById('predictions').innerHTML = '';
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
@@ -249,65 +73,96 @@ function handleFiles(files) {
                 const json = XLSX.utils.sheet_to_json(worksheet, { blankrows: true });
                 const emptyRowIndex = json.findIndex(row => Object.values(row).every(value => value === null || value === '' || value === undefined));
                 const trainingData = json.slice(0, emptyRowIndex);
-                const dataToPredict = json.slice(emptyRowIndex + 1);
+                const inferenceData = json.slice(emptyRowIndex + 1);
 
-                if (method instanceof NeuralNetworkBinaryClassification) {
-                    method.configuration[NeuralNetworkBinaryClassification.layer_nodes] = [...neuronCounts, 1];
-                    method.configuration[NeuralNetworkBinaryClassification.iterations] = document.getElementById('iterationDropdown').value;
-                }
+                console.log("training data:", trainingData);
+                const deckKeys = ["chuck's deck", "pk's deck", "dustin's deck"];
+                decks = [
+                    ...new Set(
+                        trainingData.flatMap(record =>
+                            deckKeys.map(key => record[key])
+                        )
+                    )
+                ].sort();
 
-                method.trainModelAndGraphData(trainingData, () => {
-                    updateChartMaxHeight();
-                    setChartVisible(true);
-                    myChart.update();
-                    if (method instanceof MultipleVariable || MultipleLogisticRegression) {
-                        for (let i = 1; i < myChart.data.datasets.length; i++) {
-                            myChart.data.datasets[i].hidden = true;
-                        }
-                    }
-                }, function (equationString, featureImpacts) {
-                    const keys = Object.keys(json[0]);
-                    var featureImpactsString = ""
-                    if (featureImpacts.length > 0) {
-                        if (method instanceof MultipleVariable || MultipleLogisticRegression) {
-                            featureImpactsString = featureImpacts.reduce((string, impact, index) => {
-                                return string + keys[index] + "=" + (impact * 100).toFixed(0) + "% ";
-                            }, "feature importance: ");
-                        }
-                    }
-                    document.getElementById('equation').style.display = equationString.length > 0 ? 'block' : 'none';
-                    document.getElementById('equation').innerHTML = "Prediction = " + equationString + "<br><br>" + featureImpactsString;
-                    updateChartMaxHeight();
+                console.log(decks);
 
-                    function generateTableHTML(data, lastColumnData) {
-                        if (data.length === 0) return '';
-                        const headers = Object.keys(data[0]);
-                        headers.push(keys.at(-1) + " prediction");
-                        const headerHTML = headers.map(header => `<th>${header}</th>`).join('');
-                        const rowsHTML = data.map((row, index) => {
-                            return `<tr>` +
-                                headers.slice(0, -1).map(header => `<td>${row[header]}</td>`).join('') +
-                                `<td>${lastColumnData[index].toFixed(2)}</td>` +
-                                `</tr>`;
-                        }).join('');
-                        const tableHTML = `
-                            <table border="1">
-                                <thead>
-                                    <tr>${headerHTML}</tr>
-                                </thead>
-                                <tbody>
-                                    ${rowsHTML}
-                                </tbody>
-                            </table>
+                const ohi = oneHotInputs(trainingData)
+                tf.util.shuffle(ohi);
+                const inputs = ohi.map(d => d.input);
+                const labels = ohi.map(d => d.label);
+                const inputTensor = tf.tensor2d(inputs);
+                const labelTensor = tf.tensor1d(labels, 'int32');
+                const oneHotLabels = tf.oneHot(labelTensor, 3); // 3 classes: chuck, pk, dustin
+                const model = createModel(decks.length);
+                console.log("model1:", model);
+                train(model, inputTensor, oneHotLabels, function () {
+
+                    const players = ['chuck', 'pk', 'dustin'];
+                    const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
+                    const numDecks = decks.length;
+
+                    // One-hot function
+                    const oneHot = (index, length) =>
+                        Array.from({ length }, (_, i) => (i === index ? 1 : 0));
+
+                    console.log("inference data:", inferenceData);
+                    const inputVecs = inferenceData.map(game => [
+                        ...oneHot(deckToIndex[game["chuck's deck"]], numDecks),
+                        ...oneHot(deckToIndex[game["pk's deck"]], numDecks),
+                        ...oneHot(deckToIndex[game["dustin's deck"]], numDecks)
+                    ]);
+
+                    const inputTensor = tf.tensor2d(inputVecs);
+
+                    const predictions = model.predict(inputTensor);
+
+                    predictions.array().then(results => {
+                        // Build table
+                        const table = document.createElement('table');
+                        table.style.borderCollapse = 'collapse';
+                        table.style.marginTop = '1em';
+                        table.innerHTML = `
+                          <thead>
+                            <tr>
+                              <th>Game #</th>
+                              <th>Chuck's Deck</th>
+                              <th>PK's Deck</th>
+                              <th>Dustin's Deck</th>
+                              <th>Predicted Winner</th>
+                              <th>Chuck %</th>
+                              <th>PK %</th>
+                              <th>Dustin %</th>
+                            </tr>
+                          </thead>
+                          <tbody></tbody>
                         `;
 
-                        return tableHTML;
-                    }
-                    if (emptyRowIndex != -1) {
-                        const predictions = method.parseJsonAndPredict(dataToPredict);
-                        const tableHTML = generateTableHTML(dataToPredict, predictions);
-                        document.getElementById('predictions').innerHTML = tableHTML;
-                    }
+                        const tbody = table.querySelector('tbody');
+
+                        results.forEach((probs, i) => {
+                            const game = inferenceData[i];
+                            const winnerIndex = probs.indexOf(Math.max(...probs));
+                            const predictedWinner = players[winnerIndex];
+
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                            <td>${i + 1}</td>
+                            <td>${game["chuck's deck"]}</td>
+                            <td>${game["pk's deck"]}</td>
+                            <td>${game["dustin's deck"]}</td>
+                            <td><strong>${predictedWinner}</strong></td>
+                            <td>${(probs[0] * 100).toFixed(1)}%</td>
+                            <td>${(probs[1] * 100).toFixed(1)}%</td>
+                            <td>${(probs[2] * 100).toFixed(1)}%</td>
+                          `;
+                            tbody.appendChild(row);
+                        });
+
+                        const container = document.getElementById('predictions');
+                        container.innerHTML = ''; // Clear any old table
+                        container.appendChild(table);
+                    });
                 });
             };
         } else {
@@ -316,113 +171,58 @@ function handleFiles(files) {
     });
 }
 
-function setChartVisible(showChart) {
-    if (showChart) {
-        document.getElementById('myChart').style.visibility = 'visible';
-    }
-    else {
-        document.getElementById('myChart').style.visibility = 'hidden';
-        myChart.clear();
-    }
-    updateChartMaxHeight();
+function createModel(numberOfDecks) {
+
+    const model = tf.sequential();
+    model.add(tf.layers.dense({ inputShape: numberOfDecks * 3, units: 16, activation: 'relu' }));
+    //model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
+
+    model.compile({
+        optimizer: tf.train.adam(0.01),
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+    });
+
+    model.summary();
+    return model;
 }
 
-
-const table = document.getElementById('nnTable');
-let numLayers = 1;
-let neuronCounts = [5]; // Initialize with a default value for the first layer
-createTable(); // Initial table creation
-function createTable() {
-    table.innerHTML = ''; // Clear the table
-    let buttonRow = table.insertRow();
-    let labelRow = table.insertRow();
-    let dropdownRow = table.insertRow();
-
-    // Add labels to the beginning of each row
-    let buttonLabelCell = buttonRow.insertCell(0);
-    buttonLabelCell.innerHTML = "Add/Remove";
-    let labelLabelCell = labelRow.insertCell(0);
-    labelLabelCell.innerHTML = "Hidden Layer";
-    let dropdownLabelCell = dropdownRow.insertCell(0);
-    dropdownLabelCell.innerHTML = "# of Neurons";
-
-    for (let i = 0; i < numLayers; i++) {
-        let buttonCell = buttonRow.insertCell();
-        let removeButton = document.createElement('button');
-        removeButton.textContent = '-';
-        removeButton.addEventListener('click', () => removeLayer(i));
-        buttonCell.appendChild(removeButton);
-
-        let labelCell = labelRow.insertCell();
-        let layerLabel = document.createElement('span');
-        layerLabel.textContent = `${i + 1}`;
-        labelCell.appendChild(layerLabel);
-
-        // Hide remove button if only one layer
-        if (numLayers === 1) {
-            removeButton.style.display = 'none';
-        } else {
-            removeButton.style.display = '';
-        }
-
-        // Dropdown Row (Neuron Selection)
-        let dropdownCell = dropdownRow.insertCell();
-        let dropdown = document.createElement('select');
-        dropdown.id = `layer${i + 1}`; // Add an ID to the dropdown
-        for (let j = 1; j <= 1000; j++) {
-            let option = document.createElement('option');
-            option.value = j;
-            option.text = j;
-            dropdown.add(option);
-        }
-        dropdown.value = neuronCounts[i]; // Set the selected value
-        dropdown.addEventListener('change', storeNeuronCounts); // Add event listener
-        dropdownCell.appendChild(dropdown);
-    }
-
-    // Add the "+" button column
-    let buttonCell = buttonRow.insertCell();
-    let labelCell = labelRow.insertCell();
-    let dropdownCell = dropdownRow.insertCell();
-
-    let addLayerBtn = document.createElement('button');
-    addLayerBtn.textContent = '+';
-    addLayerBtn.addEventListener('click', addLayer);
-
-    buttonCell.appendChild(addLayerBtn);
+async function train(model, inputTensor, oneHotLabels, callback) {
+    console.log('Training...');
+    console.log("model:", model);
+    await model.fit(inputTensor, oneHotLabels, {
+        epochs: 1000,
+        batchSize: 4,
+        shuffle: true,
+        callbacks: tf.callbacks.earlyStopping({ monitor: 'loss', patience: 10 })
+    });
+    console.log('Training complete!');
+    callback();
 }
 
-function addLayer() {
-    // Store current neuron counts
-    storeNeuronCounts();
-    numLayers++;
-    neuronCounts.push(1); // Default value for the new layer
-    createTable();
-    restoreNeuronCounts();
-}
+function oneHotInputs(trainingData) {
 
-function removeLayer(index) {
-    if (numLayers > 1) {
-        // Store current neuron counts
-        storeNeuronCounts();
-        numLayers--;
-        neuronCounts.splice(index, 1); // Remove the neuron count for the removed layer
-        createTable();
-        restoreNeuronCounts();
-    }
-}
+    const players = ['chuck', 'pk', 'dustin'];
 
-function storeNeuronCounts() {
-    neuronCounts = [];
-    for (let i = 1; i <= numLayers; i++) {
-        let dropdown = document.getElementById(`layer${i}`);
-        neuronCounts.push(parseInt(dropdown.value));
-    }
-}
+    const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
+    const numDecks = decks.length;
 
-function restoreNeuronCounts() {
-    for (let i = 1; i <= numLayers; i++) {
-        let dropdown = document.getElementById(`layer${i}`);
-        dropdown.value = neuronCounts[i - 1];
-    }
+    // One-hot function
+    const oneHot = (index, length) =>
+        Array.from({ length }, (_, i) => (i === index ? 1 : 0));
+
+    // Build dataset
+    const data = trainingData.map(record => {
+        const chuckVec = oneHot(deckToIndex[record["chuck's deck"]], numDecks);
+        const pkVec = oneHot(deckToIndex[record["pk's deck"]], numDecks);
+        const dustinVec = oneHot(deckToIndex[record["dustin's deck"]], numDecks);
+
+        const input = [...chuckVec, ...pkVec, ...dustinVec]; // input features
+        const label = players.indexOf(record.winner);        // 0, 1, or 2
+
+        return { input, label };
+    });
+
+    return data;
 }
