@@ -2,10 +2,10 @@
 var decks;
 var originalTitle;
 var originalImages;
+let model;
 document.addEventListener('DOMContentLoaded', function () {
     setupDropArea();
     originalTitle = document.getElementById('title').innerHTML;
-
 });
 
 function setupDropArea() {
@@ -58,6 +58,7 @@ function setupDropArea() {
 }
 
 function handleFiles(files) {
+    document.getElementById('title').innerHTML = 'Training...';
     ([...files]).forEach(file => {
         const reader = new FileReader();
         reader.onload = function (e) {
@@ -94,9 +95,8 @@ function handleFiles(files) {
                 const inputTensor = tf.tensor2d(inputs);
                 const labelTensor = tf.tensor1d(labels, 'int32');
                 const oneHotLabels = tf.oneHot(labelTensor, 3); // 3 classes: chuck, pk, dustin
-                const model = createModel(decks.length);
-                console.log("model1:", model);
-                train(model, inputTensor, oneHotLabels, function () {
+                createModel(decks.length);
+                train(inputTensor, oneHotLabels, function () {
 
                     const players = ['chuck', 'pk', 'dustin'];
                     const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
@@ -116,53 +116,11 @@ function handleFiles(files) {
                     const inputTensor = tf.tensor2d(inputVecs);
 
                     const predictions = model.predict(inputTensor);
-
                     predictions.array().then(results => {
-                        // Build table
-                        const table = document.createElement('table');
-                        table.style.borderCollapse = 'collapse';
-                        table.style.marginTop = '1em';
-                        table.innerHTML = `
-                          <thead>
-                            <tr>
-                              <th>Game #</th>
-                              <th>Chuck's Deck</th>
-                              <th>PK's Deck</th>
-                              <th>Dustin's Deck</th>
-                              <th>Predicted Winner</th>
-                              <th>Chuck %</th>
-                              <th>PK %</th>
-                              <th>Dustin %</th>
-                            </tr>
-                          </thead>
-                          <tbody></tbody>
-                        `;
-
-                        const tbody = table.querySelector('tbody');
-
-                        results.forEach((probs, i) => {
-                            const game = inferenceData[i];
-                            const winnerIndex = probs.indexOf(Math.max(...probs));
-                            const predictedWinner = players[winnerIndex];
-
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                            <td>${i + 1}</td>
-                            <td>${game["chuck's deck"]}</td>
-                            <td>${game["pk's deck"]}</td>
-                            <td>${game["dustin's deck"]}</td>
-                            <td><strong>${predictedWinner}</strong></td>
-                            <td>${(probs[0] * 100).toFixed(1)}%</td>
-                            <td>${(probs[1] * 100).toFixed(1)}%</td>
-                            <td>${(probs[2] * 100).toFixed(1)}%</td>
-                          `;
-                            tbody.appendChild(row);
-                        });
-
-                        const container = document.getElementById('predictions');
-                        container.innerHTML = ''; // Clear any old table
-                        container.appendChild(table);
+                        makePredictionsTable(players, inferenceData, results);
                     });
+
+                    createAdditionalPredictionInterface(players, decks);
                 });
             };
         } else {
@@ -171,9 +129,162 @@ function handleFiles(files) {
     });
 }
 
+function createAdditionalPredictionInterface(players, decks) {
+    const container = document.getElementById('additional-predictions');
+    container.innerHTML = ''; // Clear any existing content
+
+    const div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.gap = '20px'; // Add some horizontal spacing between the dropdowns
+
+    players.forEach(player => {
+        const label = document.createElement('label');
+        label.textContent = player;
+        label.style.display = 'block'; // Ensure label is above the dropdown
+
+        const select = document.createElement('select');
+        select.name = player;
+        select.style.marginBottom = '1em'; // Add some spacing between dropdowns
+
+        decks.forEach(deck => {
+            const option = document.createElement('option');
+            option.value = deck;
+            option.textContent = deck;
+            select.appendChild(option);
+        });
+
+        div.appendChild(label);
+        div.appendChild(select);
+    });
+
+    const predictButton = document.createElement('button');
+    predictButton.style.height = "18px";
+    predictButton.style.width = "200px";
+    predictButton.textContent = 'Predict';
+    predictButton.onclick = handlePrediction;
+    div.appendChild(document.createElement('br'));
+    div.appendChild(predictButton);
+
+    container.appendChild(div);
+}
+
+function handlePrediction() {
+    const container = document.getElementById('additional-predictions');
+    const selects = container.querySelectorAll('select');
+    const values = Array.from(selects).map(select => select.value);
+    console.log('Selected values:', values);
+    
+    console.log('handlePrediction called!');
+    const players = ['chuck', 'pk', 'dustin'];
+    const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
+    const numDecks = decks.length;
+
+    // One-hot function
+    const oneHot = (index, length) =>
+        Array.from({ length }, (_, i) => (i === index ? 1 : 0));
+
+    const inferenceData = [{"chuck's deck": values[0], "pk's deck":values[1], "dustin's deck": values[2]}];
+    console.log("inference data:", inferenceData);
+    const inputVecs = inferenceData.map(game => [
+        ...oneHot(deckToIndex[values[0]], numDecks),
+        ...oneHot(deckToIndex[values[1]], numDecks),
+        ...oneHot(deckToIndex[values[2]], numDecks)
+    ]);
+
+    const inputTensor = tf.tensor2d(inputVecs);
+
+    const predictions = model.predict(inputTensor);
+    predictions.array().then(results => {
+        console.log("results:", results);
+        appendPredictionRow(values, results[0], players);
+    });
+}
+
+function appendPredictionRow(decks, probs, players) {
+    const table = document.querySelector('#predictions table');
+    if (!table) {
+        console.error('Predictions table not found.');
+        return;
+    }
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) {
+        console.error('Table body not found.');
+        return;
+    }
+
+    const rowCount = tbody.children.length;
+    const winnerIndex = probs.indexOf(Math.max(...probs));
+    const predictedWinner = players[winnerIndex];
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>${rowCount + 1}</td>
+        <td>${decks[0]}</td>
+        <td>${decks[1]}</td>
+        <td>${decks[2]}</td>
+        <td><strong>${predictedWinner}</strong></td>
+        <td>${(probs[0] * 100).toFixed(1)}%</td>
+        <td>${(probs[1] * 100).toFixed(1)}%</td>
+        <td>${(probs[2] * 100).toFixed(1)}%</td>
+    `;
+
+    tbody.appendChild(row);
+}
+
+
+function makePredictionsTable(players, inferenceData, results) {
+    // Build table
+    const table = document.createElement('table');
+    table.style.borderCollapse = 'collapse';
+    table.style.marginTop = '1em';
+    table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Game #</th>
+              <th>Chuck's Deck</th>
+              <th>PK's Deck</th>
+              <th>Dustin's Deck</th>
+              <th>Predicted Winner</th>
+              <th>Chuck %</th>
+              <th>PK %</th>
+              <th>Dustin %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+
+    const tbody = table.querySelector('tbody');
+
+    results.forEach((probs, i) => {
+        const game = inferenceData[i];
+        const winnerIndex = probs.indexOf(Math.max(...probs));
+        const predictedWinner = players[winnerIndex];
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${game["chuck's deck"]}</td>
+            <td>${game["pk's deck"]}</td>
+            <td>${game["dustin's deck"]}</td>
+            <td><strong>${predictedWinner}</strong></td>
+            <td>${(probs[0] * 100).toFixed(1)}%</td>
+            <td>${(probs[1] * 100).toFixed(1)}%</td>
+            <td>${(probs[2] * 100).toFixed(1)}%</td>
+          `;
+        tbody.appendChild(row);
+    });
+
+    const container = document.getElementById('predictions');
+    container.innerHTML = ''; // Clear any old table
+    container.appendChild(table);
+
+    document.getElementById('title').innerHTML = originalTitle;
+}
+
 function createModel(numberOfDecks) {
 
-    const model = tf.sequential();
+    model = tf.sequential();
     model.add(tf.layers.dense({ inputShape: numberOfDecks * 3, units: 16, activation: 'relu' }));
     //model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
     model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
@@ -185,12 +296,10 @@ function createModel(numberOfDecks) {
     });
 
     model.summary();
-    return model;
 }
 
-async function train(model, inputTensor, oneHotLabels, callback) {
+async function train(inputTensor, oneHotLabels, callback) {
     console.log('Training...');
-    console.log("model:", model);
     await model.fit(inputTensor, oneHotLabels, {
         epochs: 1000,
         batchSize: 4,
