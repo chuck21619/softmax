@@ -8,6 +8,16 @@ document.addEventListener('DOMContentLoaded', function () {
     originalTitle = document.getElementById('title').innerHTML;
 });
 
+const defaultButton = document.createElement('button');
+defaultButton.textContent = 'Use Default Google Sheet';
+defaultButton.style.marginBottom = '1em';
+defaultButton.onclick = () => {
+    loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv');
+};
+
+document.getElementById('title').prepend(defaultButton);
+
+
 function setupDropArea() {
     const dropArea = document.getElementById('drop-area');
 
@@ -56,6 +66,67 @@ function setupDropArea() {
         fileInput.value = '';
     });
 }
+
+function loadFromGoogleSheet(csvUrl) {
+    document.getElementById('title').innerHTML = 'Training from Google Sheet...';
+
+    fetch(csvUrl)
+        .then(response => response.text())
+        .then(text => {
+            const workbook = XLSX.read(text, { type: 'string' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet, { blankrows: true });
+
+            const emptyRowIndex = json.findIndex(row => Object.values(row).every(value => value === null || value === '' || value === undefined));
+            const trainingData = json.slice(0, emptyRowIndex);
+            const inferenceData = json.slice(emptyRowIndex + 1);
+
+            console.log("training data:", trainingData);
+            const deckKeys = ["chuck's deck", "pk's deck", "dustin's deck"];
+            decks = [
+                ...new Set(
+                    trainingData.flatMap(record =>
+                        deckKeys.map(key => record[key])
+                    )
+                )
+            ].sort();
+
+            // One-hot function
+            const oneHot = (index, length) =>
+                Array.from({ length }, (_, i) => (i === index ? 1 : 0));
+            const ohi = oneHotInputs(trainingData);
+            tf.util.shuffle(ohi);
+            const inputs = ohi.map(d => d.input);
+            const labels = ohi.map(d => d.label);
+            const inputTensor = tf.tensor2d(inputs);
+            const labelTensor = tf.tensor1d(labels, 'int32');
+            const oneHotLabels = tf.oneHot(labelTensor, 3);
+
+            createModel(decks.length);
+            train(inputTensor, oneHotLabels, function () {
+                const players = ['chuck', 'pk', 'dustin'];
+                const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
+                const numDecks = decks.length;
+
+                const inputVecs = inferenceData.map(game => [
+                    ...oneHot(deckToIndex[game["chuck's deck"]], numDecks),
+                    ...oneHot(deckToIndex[game["pk's deck"]], numDecks),
+                    ...oneHot(deckToIndex[game["dustin's deck"]], numDecks)
+                ]);
+
+                const inputTensor = tf.tensor2d(inputVecs);
+
+                const predictions = model.predict(inputTensor);
+                predictions.array().then(results => {
+                    makePredictionsTable(players, inferenceData, results);
+                });
+
+                createAdditionalPredictionInterface(players, decks);
+            });
+        });
+}
+
 
 function handleFiles(files) {
     document.getElementById('title').innerHTML = 'Training...';
@@ -173,7 +244,7 @@ function handlePrediction() {
     const selects = container.querySelectorAll('select');
     const values = Array.from(selects).map(select => select.value);
     console.log('Selected values:', values);
-    
+
     console.log('handlePrediction called!');
     const players = ['chuck', 'pk', 'dustin'];
     const deckToIndex = Object.fromEntries(decks.map((deck, i) => [deck, i]));
@@ -183,7 +254,7 @@ function handlePrediction() {
     const oneHot = (index, length) =>
         Array.from({ length }, (_, i) => (i === index ? 1 : 0));
 
-    const inferenceData = [{"chuck's deck": values[0], "pk's deck":values[1], "dustin's deck": values[2]}];
+    const inferenceData = [{ "chuck's deck": values[0], "pk's deck": values[1], "dustin's deck": values[2] }];
     console.log("inference data:", inferenceData);
     const inputVecs = inferenceData.map(game => [
         ...oneHot(deckToIndex[values[0]], numDecks),
