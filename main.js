@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setupDropArea();
     const defaultButton = document.getElementById('loadGoogleSheetButton');
     defaultButton.onclick = () => {
-        loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv', passToPreprocessor);
+        loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv', preprocess);
     };
 });
 
@@ -36,43 +36,36 @@ function setupDropArea() {
     dropArea.addEventListener('click', () => fileInput.click());
 
     // Handle the file selection
-    dropArea.addEventListener('drop', e => handleFiles(e.dataTransfer.files, passToPreprocessor), false);
+    dropArea.addEventListener('drop', e => handleFiles(e.dataTransfer.files, preprocess), false);
     fileInput.addEventListener('change', () => {
-        handleFiles(fileInput.files, passToPreprocessor);
+        handleFiles(fileInput.files, preprocess);
         fileInput.value = '';
     });
 }
 
-function passToPreprocessor(data) {
-    console.log("data:", data);
-    let { processedPlayers, processedDecks, processedGames } = preprocessData(data);
-    players = processedPlayers;
-    console.log("players: ", processedPlayers);
-    decks = processedDecks;
-    console.log("decks: ", decks);
-    console.log("games: ", processedGames);
+function preprocess(data) {
+    players = extractPlayers(data);
+    console.log("players:", players);
+    decks = extractDecks(data);
+    console.log("decks:", decks);
     createModel(players.length, decks.length);
-    const { inputTensor, targetTensor } = prepareTrainingData(players, decks, processedGames);
-    console.log("input tensor: ", inputTensor);
-    console.log("target tensor: ", targetTensor);
-    trainModel(inputTensor, targetTensor, () => {
+    const trainingData = prepareTrainingData(players, decks, data);
+    console.log("trianing data:", trainingData);
+    trainModel(trainingData.inputs, trainingData.targets, () => {
         console.log("finished training");
         createPredictionInterface(players, decks);
     });
 }
 
 function createModel(numberOfPlayers, numberOfDecks) {
-
-    const inputShape = numberOfDecks * numberOfPlayers;
-
+    const inputShape = (numberOfDecks * numberOfPlayers) + numberOfPlayers;
     model = tf.sequential();
-    model.add(tf.layers.dense({ inputShape, units: 2000, activation: 'relu' }));
-    model.add(tf.layers.dense({ units: 1000, activation: 'relu' }));
+    model.add(tf.layers.dense({ inputShape, units: 256, activation: 'relu' }));
     model.add(tf.layers.dense({ units: numberOfPlayers, activation: 'softmax' }));
 
     model.compile({
         optimizer: 'adam',
-        loss: 'sparseCategoricalCrossentropy',
+        loss: 'categoricalCrossentropy',
         metrics: ['accuracy']
     });
 
@@ -80,12 +73,10 @@ function createModel(numberOfPlayers, numberOfDecks) {
 }
 
 async function trainModel(inputTensor, targetTensor, callback) {
-    console.log("target sensor shape:",targetTensor.shape); // should be [numExamples]
-    console.log("target sensor:", targetTensor.arraySync()); // should show integers (0, 1, 2, ...)
     await model.fit(inputTensor, targetTensor, {
         epochs: 1000,
-        batchSize: 4,
-        shuffle: true,
+        batchSize: 16,
+        shuffle: false,
         callbacks: {
             onEpochEnd: (epoch, logs) => {
                 if ((epoch + 1) % 100 === 0) {
@@ -98,6 +89,7 @@ async function trainModel(inputTensor, targetTensor, callback) {
 }
 
 function handlePrediction() {
+    console.log("-------");
     const selects = document.querySelectorAll("select");
     let game = {};
     selects.forEach(select => {
@@ -107,11 +99,10 @@ function handlePrediction() {
             game[playerName] = selectedDeck;
         }
     });
-    console.log("game:", game);
     let inputTensor = prepareInferenceData(players, decks, game);
-    console.log(inputTensor);
+    console.log(inputTensor.arraySync());
     const prediction = model.predict(inputTensor);
-    prediction.print(); // Optional: logs the prediction tensor
+    prediction.print();
     const predictedIndex = prediction.argMax(-1).dataSync()[0];
     const predictedWinner = players[predictedIndex];
     console.log("Predicted winner:", predictedWinner);

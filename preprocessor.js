@@ -1,97 +1,85 @@
-function preprocessData(data) {
+function extractPlayers(data) {
+    const uniquePlayers = new Set();
+    data.forEach(entry => {
+        Object.keys(entry).forEach(key => {
+            if (key !== 'winner') {
+                uniquePlayers.add(key);
+            }
+        });
+    });
 
-    console.log("data:", data);
+    return [...uniquePlayers].sort();
+}
 
-    let players = Array.from(new Set(data.flatMap(game => Object.keys(game).filter(key => key !== 'winner'))));
-    players.sort();
+function extractDecks(data) {
+    const uniqueDecks = new Set();
+    data.forEach(entry => {
+        for (const [key, value] of Object.entries(entry)) {
+            if (key !== 'winner' && key !== '__rowNum__') {
+                uniqueDecks.add(value);
+            }
+        }
+    });
+    return [...uniqueDecks].sort();
+}
 
-    let uniqueDecks = [];
+function prepareTrainingData(players, decks, data) {
+    const trainingData = {
+        inputs: [],
+        targets: []
+    };
+
     data.forEach(game => {
-        Object.keys(game).forEach(player => {
-            if (player !== "winner" && !uniqueDecks.includes(game[player])) {
-                uniqueDecks.push(game[player]);
-            }
-        });
+        const { input, target } = oneHotGame(game, players, decks, true);
+        trainingData.inputs.push(input);
+        trainingData.targets.push(target);
     });
-    uniqueDecks.sort();
 
-    let encodedGames = data.map(game => {
-        let gameEncoding = players.map(player => {
-            let playerEncoding = new Array(uniqueDecks.length).fill(0);
-            if (game.hasOwnProperty(player)) {
-                let deckUsed = game[player];
-                playerEncoding[uniqueDecks.indexOf(deckUsed)] = 1;
-            }
-            return playerEncoding;
-        });
-    
-        return {
-            encoded: gameEncoding,
-            winner: game.winner
-        };
-    });
-    
-    return { processedPlayers: players, processedDecks: uniqueDecks, processedGames: encodedGames };
+    console.log("inputs:", trainingData.inputs);
+    const inputTensor = tf.tensor(trainingData.inputs);
+    console.log("targets:", trainingData.targets);
+    const targetTensor = tf.tensor(trainingData.targets);
 
+    return { inputs: inputTensor, targets: targetTensor };
 }
 
-// Core function to prepare the input data for both training and inference
-function prepareGameInput(encodedGame) {
-    // Flatten the 2D array into 1D
-    return encodedGame.flat();
-}
-
-
-// Function to prepare training data
-function prepareTrainingData(players, uniqueDecks, encodedGames) {
-    console.log("prepareTrainingData");
-    console.log("players:", players);
-    console.log("uniqueDecks:", uniqueDecks);
-    console.log("encodedGames:", encodedGames);
-    const X = [];
-    const y = [];
-
-    encodedGames.forEach(game => {
-        const gameInput = prepareGameInput(game.encoded);
-        const winnerIndex = players.indexOf(game.winner);
-
-        if (winnerIndex === -1) {
-            console.warn("Winner not found in players list:", game.winner);
-            return; // skip this game if the winner is missing
-        }
-
-        X.push(gameInput);
-        y.push(winnerIndex);
-    });
-
-    // Convert X and y to tensors
-    const inputTensor = tf.tensor2d(X);
-    const targetTensor = tf.tensor2d(y, [y.length, 1]);
-
-    return { inputTensor, targetTensor };
-}
-
-// Function to prepare inference data (without target labels)
-function prepareInferenceData(players, uniqueDecks, game) {
-    const X = [];
-
-    // Create a full encoding for the game using all players and decks
-    let gameEncoding = players.map(player => {
-        let playerEncoding = new Array(uniqueDecks.length).fill(0); // Fill with 0s for all decks
-        if (game.hasOwnProperty(player)) {
-            let deckUsed = game[player];
-            playerEncoding[uniqueDecks.indexOf(deckUsed)] = 1; // Set the correct deck as 1
-        }
-        return playerEncoding;
-    });
-
-    // Ensure the game encoding has the correct shape (flatten to 1D)
-    const gameInput = prepareGameInput(gameEncoding);  // Flattened encoding for the model
-
-    // For inference, no target data is needed, just the input
-    X.push(gameInput);
-
-    // Convert the encoded data into a tensor and return it
-    const inputTensor = tf.tensor2d(X);  // This should have shape [1, 322] now
+function prepareInferenceData(players, decks, game) {
+    const inputVector = oneHotGame(game, players, decks, false);
+    const inputTensor = tf.tensor([inputVector]);
     return inputTensor;
+}
+
+function oneHotGame(game, players, decks, training) {
+    const deckInputVector = new Array(players.length * decks.length).fill(0); // Deck choice encoding
+    const playerParticipationVector = new Array(players.length).fill(0); // Player participation encoding
+    let targetVector = null;
+
+    players.forEach((player, playerIdx) => {
+        const deck = game[player];
+        if (deck) {
+            // Player is participating
+            playerParticipationVector[playerIdx] = 1;
+
+            // Find the index of the deck in the decks list
+            const deckIdx = decks.indexOf(deck);
+            if (deckIdx !== -1) {
+                // Set deck encoding to 1
+                const oneHotIdx = playerIdx * decks.length + deckIdx;
+                deckInputVector[oneHotIdx] = 1;
+            }
+        }
+    });
+
+    if (training && game.winner) {
+        targetVector = new Array(players.length).fill(0);
+        const winnerIdx = players.indexOf(game.winner);
+        if (winnerIdx !== -1) {
+            targetVector[winnerIdx] = 1;
+        }
+    }
+
+    // Combine player participation and deck choices as input
+    const inputVector = [...playerParticipationVector, ...deckInputVector];
+
+    return training ? { input: inputVector, target: targetVector } : inputVector;
 }
