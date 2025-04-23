@@ -93,42 +93,35 @@ function predictWinner() {
     const inferenceData = prepareInferenceData();
     console.log('Inference Data:', inferenceData);
     
-    // Prepare tensors for prediction
     const playerTensor = tf.tensor2d([inferenceData.players], [1, 4], 'int32');
     const deckTensor = tf.tensor2d([inferenceData.decks], [1, 4], 'int32');
 
-    // Get prediction data
-    const prediction = model.predict([playerTensor, deckTensor]).dataSync();  // Use .dataSync() to get raw data from tensor
-    console.log('Prediction:', prediction);
+    const predictions = model.predict([playerTensor, deckTensor]).dataSync();  // Get the prediction values
+    console.log('Prediction Output:', predictions);
 
-    // Map prediction values to percentages and associate them with selected players
-    const playerPercentages = inferenceData.players.map((playerIndex, idx) => {
-        if (playerIndex !== -1) {
-            return {
-                player: players[playerIndex],  // The player name
-                percentage: (prediction[idx] * 100).toFixed(2)  // Convert prediction to percentage
-            };
-        }
-        return null;
-    }).filter(item => item !== null);  // Filter out null values (unselected players)
-
-    // Find the expected winner by looking for the player with the highest prediction
-    const expectedWinner = playerPercentages.reduce((max, player) => {
-        return player.percentage > max.percentage ? player : max;
-    }, playerPercentages[0]);
-
-    // Create a message for the alert
-    let message = 'Prediction Results:\n\n';
-
-    playerPercentages.forEach(player => {
-        message += `${player.player}: ${player.percentage}%\n`;
+    // Create an array to map players and their corresponding predicted percentage
+    const playerPercentages = inferenceData.players.map((playerId, index) => {
+        return {
+            player: players[playerId], // Get the player name based on their ID
+            percentage: predictions[index], // Corresponding prediction
+        };
     });
 
-    message += `\nExpected Winner: ${expectedWinner.player}`;
+    // Sort players by prediction percentage
+    playerPercentages.sort((a, b) => b.percentage - a.percentage); // Sort in descending order by percentage
 
-    // Display the alert with the prediction results
+    // Get the expected winner (player with the highest percentage)
+    const expectedWinner = playerPercentages[0].player;
+
+    // Build the alert message
+    const message = playerPercentages
+        .map(item => `${item.player}: ${Math.round(item.percentage * 100)}%`)
+        .join('\n') + `\n\nExpected Winner: ${expectedWinner}`;
+
+    // Display the alert with all player percentages and the expected winner
     alert(message);
 }
+
 
 
 
