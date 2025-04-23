@@ -1,6 +1,7 @@
 import { createModel } from './model.js';
 import { prepareData } from './data.js';
 
+var originalTitle;
 const MAX_PLAYERS = 4;  // Define this globally at the top
 
 let players = [];  // Global variable for players
@@ -10,6 +11,7 @@ let model;
 document.getElementById('predictButton').addEventListener('click', predictWinner);
 
 document.addEventListener('DOMContentLoaded', function () {
+    originalTitle = document.getElementById('title').innerHTML;
     const sheetButton = document.getElementById('loadGoogleSheetButton');
     sheetButton.onclick = () => {
         loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv');
@@ -37,6 +39,7 @@ async function trainModel(xs, ys) {
     });
 
     console.log('Training Complete!');
+    document.getElementById('title').innerHTML = originalTitle;
     updateUIAfterTraining();  // Update the UI with the vocab after training
 
     // Enable predict button once training is complete
