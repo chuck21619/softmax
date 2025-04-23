@@ -1,21 +1,28 @@
 import { createModel } from './model.js';
-import { rawGames, buildVocab, prepareData } from './data.js';
+import { prepareData } from './data.js';
 
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 4;  // Define this globally at the top
 
-const { playerToIndex, deckToIndex } = buildVocab(rawGames);
-const NUM_PLAYERS = Object.keys(playerToIndex).length;
-const NUM_DECKS = Object.keys(deckToIndex).length;
+let players = [];  // Global variable for players
+let decks = [];    // Global variable for decks
+let model;
 
-const { xs, ys } = prepareData(rawGames, playerToIndex, deckToIndex, MAX_PLAYERS);
-const model = createModel(NUM_PLAYERS, NUM_DECKS);
+document.getElementById('predictButton').addEventListener('click', predictWinner);
 
-// Wrap the training logic in a function
-async function trainModel(xs, ys, playerToIndex, deckToIndex) {
+document.addEventListener('DOMContentLoaded', function () {
+    const sheetButton = document.getElementById('loadGoogleSheetButton');
+    sheetButton.onclick = () => {
+        loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv');
+    };
+
+    // Disable predict button initially, will enable after training
+    document.getElementById('predictButton').disabled = true;
+});
+
+// Function to train the model using the loaded data
+async function trainModel(xs, ys) {
     console.log('Training...');
-
-    // Create model with the correct number of players and decks
-    const model = createModel(Object.keys(playerToIndex).length, Object.keys(deckToIndex).length);
+    model = createModel(players.length, decks.length);
 
     await model.fit(xs, ys, {
         epochs: 100,
@@ -29,44 +36,104 @@ async function trainModel(xs, ys, playerToIndex, deckToIndex) {
         }
     });
 
-    // ✅ Ensure vocab exists
-    if (!playerToIndex || !deckToIndex) {
-        throw new Error("Vocab maps not defined!");
-    }
+    console.log('Training Complete!');
+    updateUIAfterTraining();  // Update the UI with the vocab after training
 
-    const examplePlayers = ['chuck', 'pk', 'dustin'];
-    const exampleDecks = ['windgrace', 'wyleth', 'lita'];
-
-    // Prepare example player and deck inputs
-    const player_input_arr = [examplePlayers.map(p => playerToIndex[p] || 0)];
-    const deck_input_arr = [exampleDecks.map(d => deckToIndex[d] || 0)];
-
-    // Pad inputs if there are fewer than 4 players or decks
-    while (player_input_arr[0].length < 4) {
-        player_input_arr[0].push(0);
-        deck_input_arr[0].push(0);
-    }
-
-    // Convert arrays to tensors for prediction
-    const pTensor = tf.tensor2d(player_input_arr, [1, 4], 'int32');
-    const dTensor = tf.tensor2d(deck_input_arr, [1, 4], 'int32');
-
-    // Make a prediction and print the result
-    model.predict([pTensor, dTensor]).print(); // ✅ This works!
+    // Enable predict button once training is complete
+    document.getElementById('predictButton').disabled = false;
 }
 
-// Add an event listener for the button click to start training manually
-document.addEventListener('DOMContentLoaded', function () {
+// Function to update the UI with player and deck options after training
+function updateUIAfterTraining() {
+    document.getElementById('predictionSection').style.display = 'block';
 
-    // Optional: Add the Google Sheet button logic as well
-    const sheetButton = document.getElementById('loadGoogleSheetButton');
-    sheetButton.onclick = () => {
-        loadFromGoogleSheet('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMpIhYcYDwpGE_GlsMTClC8WaFgNGAmVa_8SH5QwloJn9aFze3ifL_XPiYJnDQtNZYWsuVZ9xUl8TF/pub?gid=0&single=true&output=csv');
-    };
-});
+    console.log('Players:', players);
+    console.log('Decks:', decks);
 
-// Function to load data from Google Sheet (remains unchanged)
-function loadFromGoogleSheet(csvUrl) {
+    for (let i = 1; i <= 4; i++) {
+        const playerDropdown = document.getElementById(`player${i}`);
+        const deckDropdown = document.getElementById(`deck${i}`);
+
+        playerDropdown.innerHTML = '';
+        deckDropdown.innerHTML = '';
+
+        playerDropdown.add(new Option('Select Player', ''));
+        deckDropdown.add(new Option('Select Deck', ''));
+
+        players.forEach(player => {
+            playerDropdown.add(new Option(player, player));
+        });
+
+        decks.forEach(deck => {
+            deckDropdown.add(new Option(deck, deck));
+        });
+    }
+}
+
+function prepareInferenceData() {
+    const playersSelection = [];
+    const decksSelection = [];
+
+    for (let i = 1; i <= 4; i++) {
+        const player = document.getElementById(`player${i}`).value;
+        const deck = document.getElementById(`deck${i}`).value;
+        playersSelection.push(players.indexOf(player) !== -1 ? players.indexOf(player) : -1);
+        decksSelection.push(decks.indexOf(deck) !== -1 ? decks.indexOf(deck) : -1);
+    }
+
+    while (playersSelection.length < 4) {
+        playersSelection.push(-1);
+        decksSelection.push(-1);
+    }
+
+    return { players: playersSelection, decks: decksSelection };
+}
+
+function predictWinner() {
+    const inferenceData = prepareInferenceData();
+    console.log('Inference Data:', inferenceData);
+    
+    // Prepare tensors for prediction
+    const playerTensor = tf.tensor2d([inferenceData.players], [1, 4], 'int32');
+    const deckTensor = tf.tensor2d([inferenceData.decks], [1, 4], 'int32');
+
+    // Get prediction data
+    const prediction = model.predict([playerTensor, deckTensor]).dataSync();  // Use .dataSync() to get raw data from tensor
+    console.log('Prediction:', prediction);
+
+    // Map prediction values to percentages and associate them with selected players
+    const playerPercentages = inferenceData.players.map((playerIndex, idx) => {
+        if (playerIndex !== -1) {
+            return {
+                player: players[playerIndex],  // The player name
+                percentage: (prediction[idx] * 100).toFixed(2)  // Convert prediction to percentage
+            };
+        }
+        return null;
+    }).filter(item => item !== null);  // Filter out null values (unselected players)
+
+    // Find the expected winner by looking for the player with the highest prediction
+    const expectedWinner = playerPercentages.reduce((max, player) => {
+        return player.percentage > max.percentage ? player : max;
+    }, playerPercentages[0]);
+
+    // Create a message for the alert
+    let message = 'Prediction Results:\n\n';
+
+    playerPercentages.forEach(player => {
+        message += `${player.player}: ${player.percentage}%\n`;
+    });
+
+    message += `\nExpected Winner: ${expectedWinner.player}`;
+
+    // Display the alert with the prediction results
+    alert(message);
+}
+
+
+
+
+async function loadFromGoogleSheet(csvUrl) {
     document.getElementById('title').innerHTML = 'Training from Google Sheet...';
     fetch(csvUrl)
         .then(response => response.text())
@@ -75,13 +142,29 @@ function loadFromGoogleSheet(csvUrl) {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const json = XLSX.utils.sheet_to_json(worksheet, { blankrows: true });
+
             console.log(json);
 
-            // Prepare the data from the Google Sheet
-            const { playerToIndex, deckToIndex } = buildVocab(json);
-            const { xs, ys } = prepareData(json, playerToIndex, deckToIndex, MAX_PLAYERS);
+            const playerSet = new Set();
+            const deckSet = new Set();
 
-            // Train the model using the prepared data
-            trainModel(xs, ys, playerToIndex, deckToIndex);  // Passing vocab maps as well
+            json.forEach(game => {
+                Object.keys(game).forEach(key => {
+                    if (key !== 'winner') {
+                        playerSet.add(key);
+                        deckSet.add(game[key]);
+                    }
+                });
+            });
+
+            players = Array.from(playerSet).sort();
+            decks = Array.from(deckSet).sort();
+
+            console.log('Sorted Players:', players);
+            console.log('Sorted Decks:', decks);
+
+            const { xs, ys } = prepareData(json, players, decks, MAX_PLAYERS);
+
+            trainModel(xs, ys);
         });
 }

@@ -1,29 +1,5 @@
-export const rawGames = [
-    { chuck: 'windgrace', pk: 'wyleth', dustin: 'lita', winner: 'chuck' },
-    { chuck: 'yuriko', emily: 'edgar', winner: 'emily' },
-    // Add more games here...
-];
-
-export function buildVocab(games) {
-    const players = new Set();
-    const decks = new Set();
-
-    games.forEach(game => {
-        Object.keys(game).forEach(key => {
-            if (key !== 'winner') {
-                players.add(key);
-                decks.add(game[key]);
-            }
-        });
-    });
-
-    return {
-        playerToIndex: Object.fromEntries([...players].map((p, i) => [p, i])),
-        deckToIndex: Object.fromEntries([...decks].map((d, i) => [d, i])),
-    };
-}
-
-export function prepareData(games, playerToIndex, deckToIndex, MAX_PLAYERS = 4) {
+// data.js
+export function prepareData(games, players, decks, MAX_PLAYERS = 4) {
     const inputs = {
         player_input: [],
         deck_input: [],
@@ -31,15 +7,18 @@ export function prepareData(games, playerToIndex, deckToIndex, MAX_PLAYERS = 4) 
     const labels = [];
 
     games.forEach(game => {
-        const players = Object.keys(game).filter(k => k !== 'winner');
-        const playerIDs = players.map(p => playerToIndex[p]);
-        const deckIDs = players.map(p => deckToIndex[game[p]]);
-        const winnerIndex = players.indexOf(game.winner);
+        const playerIDs = Object.keys(game)
+            .filter(key => key !== 'winner')
+            .map(player => players.indexOf(player));
+        const deckIDs = Object.keys(game)
+            .filter(key => key !== 'winner')
+            .map(player => decks.indexOf(game[player]));
+        const winnerIndex = Object.keys(game).indexOf(game.winner);
 
         // Pad to MAX_PLAYERS
         while (playerIDs.length < MAX_PLAYERS) {
-            playerIDs.push(0);
-            deckIDs.push(0);
+            playerIDs.push(-1);
+            deckIDs.push(-1);
         }
 
         inputs.player_input.push(playerIDs);
@@ -53,6 +32,5 @@ export function prepareData(games, playerToIndex, deckToIndex, MAX_PLAYERS = 4) 
             deck_input: tf.tensor2d(inputs.deck_input, undefined, 'int32'),
         },
         ys: tf.tensor1d(labels, 'float32'),
-
     };
 }
