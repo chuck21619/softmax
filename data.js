@@ -44,20 +44,27 @@ class Data {
             return [...uniqueDecks].sort();
         }
 
-        this.inputTensorFromCleanedGames = function inputTensorFromCleanedGames(games, players, decks) {
+        this.inputTensorsFromCleanedGames = function inputTensorsFromCleanedGames(games, players, decks) {
             const paddedGames = this.padData(games);
-            let encodedGames = [];
-            paddedGames.forEach(function (game) {
-                let encodedGame = [];
+            let playerData = [];
+            let deckData = [];
+        
+            paddedGames.forEach((game) => {
+                let playerRow = [];
+                let deckRow = [];
                 for (const [key, value] of Object.entries(game)) {
-                    encodedGame.push(players.indexOf(key));
-                    encodedGame.push(decks.indexOf(value));
+                    playerRow.push(players.indexOf(key));
+                    deckRow.push(decks.indexOf(value));
                 }
-                encodedGames.push(encodedGame);
+                playerData.push(playerRow);
+                deckData.push(deckRow);
             });
-            const inputTensor = tf.tensor2d(encodedGames);
-            return inputTensor;
-        }
+        
+            const playerTensor = tf.tensor2d(playerData, [playerData.length, 4]);
+            const deckTensor = tf.tensor2d(deckData, [deckData.length, 4]);
+        
+            return { playerTensor, deckTensor };
+        };        
 
         this.padData = function padData(games) {
             games.forEach(function (game) {

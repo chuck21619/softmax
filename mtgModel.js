@@ -1,46 +1,43 @@
+const epochs = 200;
+
 export function createModel(numPlayers, numDecks) {
-    const playerEmbeddingSize = 4;
-    const deckEmbeddingSize = 8;
+    const playerInput = tf.input({ shape: [4], dtype: 'int32', name: 'playerInput' });
+    const deckInput = tf.input({ shape: [4], dtype: 'int32', name: 'deckInput' });
 
-    // Input: shape [8] (4 player IDs and 4 deck IDs)
-    const input = tf.input({ shape: [8], dtype: 'int32' });
-
-    // Manually slice using tf.slice in separate layers
-    const playerInput = tf.layers.embedding({
+    const playerEmbedding = tf.layers.embedding({
         inputDim: numPlayers,
-        outputDim: playerEmbeddingSize,
-        inputLength: 4,
-    }).apply(tf.layers.lambda({
-        func: x => tf.slice(x, [0, 0], [-1, 1]).concat(
-            tf.slice(x, [0, 2], [-1, 1])).concat(
-                tf.slice(x, [0, 4], [-1, 1])).concat(
-                    tf.slice(x, [0, 6], [-1, 1]))
-    }).apply(input));
+        outputDim: 4, // small embedding size for players
+        name: 'playerEmbedding',
+    }).apply(playerInput);
 
-    const deckInput = tf.layers.embedding({
+    const deckEmbedding = tf.layers.embedding({
         inputDim: numDecks,
-        outputDim: deckEmbeddingSize,
-        inputLength: 4,
-    }).apply(tf.layers.lambda({
-        func: x => tf.slice(x, [0, 1], [-1, 1]).concat(
-            tf.slice(x, [0, 3], [-1, 1])).concat(
-                tf.slice(x, [0, 5], [-1, 1])).concat(
-                    tf.slice(x, [0, 7], [-1, 1]))
-    }).apply(input));
+        outputDim: 8, // larger embedding size for decks
+        name: 'deckEmbedding',
+    }).apply(deckInput);
 
-    // Flatten embeddings
-    const flatPlayers = tf.layers.flatten().apply(playerInput);
-    const flatDecks = tf.layers.flatten().apply(deckInput);
+    const playerFlat = tf.layers.flatten().apply(playerEmbedding);
+    const deckFlat = tf.layers.flatten().apply(deckEmbedding);
 
-    // Combine everything
-    const combined = tf.layers.concatenate().apply([flatPlayers, flatDecks]);
+    const combined = tf.layers.concatenate().apply([playerFlat, deckFlat]);
 
-    // Dense layers
-    const dense1 = tf.layers.dense({ units: 64, activation: 'relu' }).apply(combined);
-    const output = tf.layers.dense({ units: numPlayers, activation: 'softmax' }).apply(dense1);
+    const dense1 = tf.layers.dense({
+        units: 64,
+        activation: 'relu',
+        name: 'dense_1',
+    }).apply(combined);
 
-    // Compile model
-    const model = tf.model({ inputs: input, outputs: output });
+    const output = tf.layers.dense({
+        units: numPlayers, // predicting winner from player list
+        activation: 'softmax',
+        name: 'output',
+    }).apply(dense1);
+
+    const model = tf.model({
+        inputs: [playerInput, deckInput],
+        outputs: output,
+        name: 'PlayerDeckModel',
+    });
 
     model.compile({
         optimizer: 'adam',
@@ -49,4 +46,20 @@ export function createModel(numPlayers, numDecks) {
     });
 
     return model;
+}
+
+export async function trainModel(model, playerTensor, deckTensor, targetTensor, callback) {
+    console.log('Training...');
+    await model.fit([playerTensor, deckTensor], targetTensor, {
+        epochs: epochs,
+        batchSize: 16,
+        callbacks: {
+            onEpochEnd: (epoch, logs) => {
+                if (epoch % (epochs/10) == 0) {
+                    console.log(`Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, acc = ${logs.acc.toFixed(4)}`);
+                }
+            }
+        }
+    });
+    callback();
 }
