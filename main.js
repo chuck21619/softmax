@@ -1,5 +1,6 @@
 let players = [];
 let decks = [];
+let deckStrength = [];
 let model;
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -44,12 +45,14 @@ function setupDropArea() {
 }
 
 function preprocess(data) {
+    console.log("data:", data);
     players = extractPlayers(data);
     console.log("players:", players);
     decks = extractDecks(data);
     console.log("decks:", decks);
+    deckStrength = calculateDeckStrength(decks, data);
     createModel(players.length, decks.length);
-    const trainingData = prepareTrainingData(players, decks, data);
+    const trainingData = prepareTrainingData(players, decks, deckStrength, data);
     console.log("trianing data:", trainingData);
     trainModel(trainingData.inputs, trainingData.targets, () => {
         console.log("finished training");
@@ -58,9 +61,10 @@ function preprocess(data) {
 }
 
 function createModel(numberOfPlayers, numberOfDecks) {
-    const inputShape = (numberOfDecks * numberOfPlayers) + numberOfPlayers;
+    const inputShape = (numberOfDecks * numberOfPlayers) + numberOfPlayers + numberOfDecks;
     model = tf.sequential();
     model.add(tf.layers.dense({ inputShape, units: 256, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: 128, activation: 'relu' }));
     model.add(tf.layers.dense({ units: numberOfPlayers, activation: 'softmax' }));
 
     model.compile({
@@ -74,8 +78,8 @@ function createModel(numberOfPlayers, numberOfDecks) {
 
 async function trainModel(inputTensor, targetTensor, callback) {
     await model.fit(inputTensor, targetTensor, {
-        epochs: 1000,
-        batchSize: 16,
+        epochs: 100,
+        batchSize: 4,
         shuffle: false,
         callbacks: {
             onEpochEnd: (epoch, logs) => {
@@ -99,7 +103,7 @@ function handlePrediction() {
             game[playerName] = selectedDeck;
         }
     });
-    let inputTensor = prepareInferenceData(players, decks, game);
+    let inputTensor = prepareInferenceData(players, decks, deckStrength, game);
     console.log(inputTensor.arraySync());
     const prediction = model.predict(inputTensor);
     prediction.print();
