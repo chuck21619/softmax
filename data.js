@@ -48,7 +48,7 @@ class Data {
             const paddedGames = this.padData(games);
             let playerData = [];
             let deckData = [];
-        
+
             paddedGames.forEach((game) => {
                 let playerRow = [];
                 let deckRow = [];
@@ -59,12 +59,12 @@ class Data {
                 playerData.push(playerRow);
                 deckData.push(deckRow);
             });
-        
+
             const playerTensor = tf.tensor2d(playerData, [playerData.length, 4]);
             const deckTensor = tf.tensor2d(deckData, [deckData.length, 4]);
-        
+
             return { playerTensor, deckTensor };
-        };        
+        };
 
         this.padData = function padData(games) {
             games.forEach(function (game) {
@@ -79,12 +79,53 @@ class Data {
         };
 
         this.targetTensorFromWinners = function targetTensorFromWinners(winners, players) {
-            const encodedWinners = winners.map( function (winner) {
+            const encodedWinners = winners.map(function (winner) {
                 return players.indexOf(winner);
             });
             const targetTensor = tf.tensor1d(encodedWinners);
             return targetTensor;
         }
+
+        this.shuffleGamesAndRepeatWinners = function shuffleGamesAndRepeatWinners(cleanedGames, winners, shuffleCount = 10) {
+            const shuffledGames = [];
+            const repeatedWinners = [];
+
+            for (let i = 0; i < cleanedGames.length; i++) {
+                const game = cleanedGames[i];
+                const winner = winners[i];
+
+                // Shuffle the players in the game 'shuffleCount' times
+                for (let j = 0; j < shuffleCount; j++) {
+                    const shuffledGame = this.shuffleGame(game); // You'll define this shuffleGame function
+                    shuffledGames.push(shuffledGame);
+                    repeatedWinners.push(winner);  // Repeat the winner for each shuffle
+                }
+            }
+
+            return { shuffledGames, repeatedWinners };
+        }
+
+        this.shuffleGame = function shuffleGame(game) {
+            const players = Object.keys(game);
+            const shuffledPlayers = this.shuffleArray(players);
+
+            const shuffledGame = {};
+            shuffledPlayers.forEach(player => {
+                shuffledGame[player] = game[player];
+            });
+
+            return shuffledGame;
+        }
+
+        this.shuffleArray = function shuffleArray(array) {
+            const arrCopy = array.slice();
+            for (let i = arrCopy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arrCopy[i], arrCopy[j]] = [arrCopy[j], arrCopy[i]];
+            }
+            return arrCopy;
+        }
+
     }
 }
 
